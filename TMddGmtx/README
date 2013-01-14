@@ -1,0 +1,6 @@
+Analysis of SNV in membrane regions based on experimentaly derived ddG values.
+Program calculates scores dependent on aa position in membrane
+
+Version
+TMddGmtx-0.1.pl	
+	sketch

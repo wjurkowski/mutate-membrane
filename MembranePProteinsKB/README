@@ -1,0 +1,15 @@
+http://blocks.fhcrc.org/sift/PHAT_matrices/
+
+The PHAT matrices are constructed from target values of a 
+PHDhtm matrix and background frequencies of the Persson-Argos
+matrix with corresponding entropy.
+
+PHAT_T=75_B=73 indicates that target frequencies were obtained
+from PHDhtm 75 and background frequencies from Persson-Argos 73. 
+
+We found that PHAT_T=75_B73 worked best for transmembrane regions,
+although all of the PHAT matrices showed significant improvement
+over the generalized matrices BLOSUM62 and JTT-modified PAM and 
+the JTT transmembrane matrix.
+
+

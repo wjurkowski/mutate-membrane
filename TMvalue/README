@@ -1,0 +1,9 @@
+Apply substitution matrix to scores genetic variations in TM regions
+
+Versions:
+TMvalue-0.1.pl to TMvalue-0.2.2.pl
+	sketches
+TMvalue-0.3.pl
+	first working: finds variants in membrane regions
+	applies phat (or any other) matrix to score variants
+	

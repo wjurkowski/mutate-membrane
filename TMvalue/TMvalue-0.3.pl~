@@ -1,0 +1,126 @@
+#!/usr/bin/perl -w
+use strict;
+use warnings;
+use List::Util qw( min max );
+
+#Two files are needed: 1) list of variations 2) uniprotKB features: AA ranges (output of upanno.pl) 
+if ($#ARGV != 2) {die "Program used with parameters [list of variations] [uniprot features] [substitution matrix]\n";}
+
+#read uniprot features
+#AA ranges: TM and IM segments
+#uniprotAC;uniprotID;TRANSMEM;INTRAMEM
+my ($uniAC,$uniID);
+my (%transmem,%intramem);
+my @features=open_file($ARGV[1]);
+for(my $i=0;$i<$#features+1;$i++){
+  my $row=$features[$i];
+  my @prot=split(/\t/,$row);
+  $uniID=$prot[0];
+  $uniAC=$prot[1];
+  $transmem{$uniAC}=$prot[2];
+  $intramem{$uniAC}=$prot[3];
+}
+
+#read variants and compare with annotation
+open (OUT1, ">Membrane_AA_effects.txt"); 
+#open (OUT1, ">Annotated_AA.txt"); 
+#open (OUT2, ">Annotated_AApairs.txt"); 
+#open (OUT3, ">Annotated_AAranges.txt"); 
+printf OUT1 "uniprotAC\twtAA\tAApos\tmtAA\ttype\tInsertion_ddG\tclass\n";
+my @variants=open_file($ARGV[0]);
+for (my $i=1;$i<=$#variants;$i++){#GVkey, Symbol, Entrez,  Uniprot AC, Uniprot ID, Ref AA, Position, Var AA, disease
+  my ($r1, $r2);
+  $r1 = $r2 = 0;
+  my $type="NA";
+  my @aa=split(/\t/,$variants[$i]);
+  my $wt=$aa[5];
+  my $pos=$aa[6];
+  my $mt=$aa[7];
+  my $uniAC=$aa[3];
+  #test AA ranges
+  unless($transmem{$uniAC} eq "NA"){$r1=testAArange($pos,$transmem{$uniAC});}
+  unless($intramem{$uniAC} eq "NA"){$r2=testAArange($pos,$intramem{$uniAC});}
+  if($r1 == 1 or $r2 == 1){
+    if($r1 == 1){$type = "TRANSMEM";}
+    elsif($r2 == 1){$type = "INTRAMEM";}
+    #apply PHAT and get classification of variant
+    my @res=scoreTMaa($wt,$pos,$mt);
+    printf OUT1 "$uniAC\t$wt\t$pos\t$mt\t$type\t$res[0]\t$res[1]\n";
+  }
+}
+
+
+#functions=============================================================
+#apply substitution matrix and classify
+sub scoreTMaa{
+
+#read substitution matrix
+my @mtx=open_file($ARGV[2]);
+#get vector representing substitutions of given aa (in alphabetical order) 
+#A  R  N  D  C  Q  E  G  H  I  L  K  M  F  P  S  T  W  Y  V  B  Z  X  *
+#define indexes
+my (%index);
+my @head=split(/\s+/,$mtx[0]);
+shift @head;
+for(my $k=0;$k<=$#head;$k++){
+  $index{$head[$k]}=$k;
+}
+#get matrix
+my (@mat,@matc);
+for(my $i=1;$i<=$#mtx;$i++){
+  my @row=split(/\s+/,$mtx[$i]);
+  shift (@row);
+  my $min = min @row;
+  my $max = max @row;
+  my $R=$max-$min;
+  my $dk=$R/4;
+  my $idx= $i - 1;#to have same $k and $i indexing start 
+  for(my $k=0;$k<=$#row;$k++){
+    $mat[$idx][$k] = $row[$k];
+#print "$idx $k $mat[$idx][$k]\n";
+    if($row[$k] < ($min+(1*$dk))){$matc[$idx][$k]=-2;}
+    elsif($row[$k] < ($min+(2*$dk))){$matc[$idx][$k]=-1;}
+    elsif($row[$k] < ($min+(3*$dk))){$matc[$idx][$k]=1;}
+    elsif($row[$k] < ($min+(4*$dk))){$matc[$idx][$k]=2;}
+  }		
+}
+
+#apply matrix
+my $wt = shift;
+my $pos = shift;
+my $mt = shift;
+my $del=0;
+my (@res);
+my $i = $index{$wt};
+my $k = $index{$mt};
+if($mat[$i][$k] < 0){
+  $del=1;
+}
+$res[0] = $del;
+$res[1] = $matc[$i][$k];#confidence levels
+
+return @res;
+#end of subroutine
+}
+
+#annotate variants using 
+sub testAArange{
+  my ($pos,$string)=@_;
+  my $match = 0;
+  my @values=split(/\,/,$string);
+  foreach my $val(@values){
+    my @range = split(/-/,$val);
+    if($pos >= $range[0] and $pos <= $range[1]){$match=1;} 
+  }
+  return $match;
+}
+
+#open file 
+sub open_file{
+  my ($file_name)=@_;
+  open(INP1, "< $file_name") or die "Can not open an input file: $!";
+  my @file1=<INP1>;
+  close (INP1);
+  chomp @file1;
+  return @file1;
+}		

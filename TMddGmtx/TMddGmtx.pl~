@@ -1,0 +1,125 @@
+#!/usr/bin/perl -w
+use strict;
+use warnings;
+use List::Util qw( min max );
+
+#Two files are needed: 1) list of variations 2) uniprotKB features (output of upanno.pl)
+if ($#ARGV != 1) {die "Program used with parameters [list of variations] [uniprot features]\n";}
+
+
+#parse_variations
+my @variations=open_file($ARGV[0]);
+my(@variat, %allvarAA, %uniSNV);
+
+for(my $i=0;$i<$#variations+1;$i++){#TODO: uproscic  - zostawic tylko to co potrzebne
+	my @tab = split(/\t/,$variations[$i]);#GVkey, Symbol, Entrez,  Uniprot AC, Uniprot ID, Ref AA, Position, Var AA, disease
+	push (@{$variat[$i]}, @tab);
+	my $waryjat=$variat[$i][3]."_".$variat[$i][5].$variat[$i][6];
+	$allvarAA{$waryjat}=$i;
+	$uniSNV{$variat[$i][3]}++;#hash counting number of GV in protein
+}	
+
+#read uniprot features
+#AA ranges: TM and IM segments
+#uniprotAC;uniprotID;TRANSMEM;INTRAMEM
+my @features=open_files($ARGV[1]);
+for(my $i=0;$i<$#features+1;$i++){
+my $row=$funcaarange[$i];
+  my @prot=split(/\t/,$row);
+  $uniID=$prot[0];
+  $uniAC=$prot[1];
+  $transmem{$uniAC}=$prot[2];
+  $intramem{$uniAC}=$prot[3];
+}
+
+#read substitution matrix
+my @matrix=open_files($ARGV[2]);
+#get vector representing substitutions of given aa (in alphabetical order) 
+#A  R  N  D  C  Q  E  G  H  I  L  K  M  F  P  S  T  W  Y  V  B  Z  X  *
+my @head=split(/\t/,$matrix[0]);
+my (@mat,@matc);
+for(my $i=1;$i<=$#matrix;$i++){
+  my @row=split(/\t/,$matrix[$i]);
+  my $min = min @row;
+  my $max = max @row;
+  my $R=$max-$min;
+  my $dk=$R/4;
+  for(my $k=1;$k<=$#row;$k++){
+	$mat[$i][$k] = $row[$k];
+	if($row[$k] < ($min+(1*$dk))){$matc[$i][$k]=1;}
+	if($row[$k] < ($min+(1*$dk))){$matc[$i][$k]=2;}
+	if($row[$k] < ($min+(1*$dk))){$matc[$i][$k]=3;}
+	if($row[$k] < ($min+(1*$dk))){$matc[$i][$k]=4;}
+  }		
+}
+
+#read variants and compare with annotation
+open (OUT, ">Annotated_TM.txt"); 
+#open (OUT1, ">Annotated_AA.txt"); 
+#open (OUT2, ">Annotated_AApairs.txt"); 
+#open (OUT3, ">Annotated_AAranges.txt"); 
+printf OUT1 "uniprotAC\twtAA\tAApos\tmtAA\ttype\tInsertion_ddG\tclass\n";
+my @variants=open_file($ARGV[0]);
+for (my $i=1;$i<=$#variants;$i++){#GVkey, Symbol, Entrez,  Uniprot AC, Uniprot ID, Ref AA, Position, Var AA, disease
+  my ($r1, $r2);
+  $r1 = $r2 = 0;
+  my $type="NA";
+  my @aa=split(/\t/,$variants[$i]);
+  my $wt=$aa[5];
+  my $pos=$aa[6];
+  my $mt=$aa[7];
+  my $uniAC=$aa[3];
+  #test AA ranges
+  unless($transmem{$uniAC} eq "NA"){$r1=testAArange($pos,$transmem{$uniAC});}
+  unless($intramem{$uniAC} eq "NA"){$r2=testAArange($pos,$intramem{$uniAC});}
+  if($r1 == 1 or $r2 == 1){
+    if($r1 == 1){$type = "TRANSMEM";}
+    elsif($r2 == 1){$type = "INTRAMEM";}
+    #apply PHAT and 
+    #apply new substitution matrix and get classification of variant
+    my $ddG=TMddG($pos);
+    my $class=class_ddG($ddG);
+    printf OUT1 "$uniAC\t$wt\t$pos\t$mt\t$type\t$ddG\t$class\n";
+  }
+}
+
+
+#functions=============================================================
+#get ddG scores for insertion of helix into the membrane
+sub TMddG{
+}
+
+#classify according to TMddG
+sub class_ddG{
+  my ($val,@classes)=@_;
+  if($val <= ){}
+}
+
+
+
+#OTHER:
+#check specific TM residues
+#TM seq alignment
+#find conserved residues
+#check within radius of 5A
+
+
+sub testAArange{
+	my ($pos,$string)=@_;
+	my ($match);
+	my @values=split(/\;/,$string);
+	foreach my $val(@values){
+		my @range = split(/-/,$val);
+		if($pos >= $range[0] and $pos <= $range[1]){$match=1;} 
+	}
+	return $match;
+}
+
+sub open_file{
+        my ($file_name)=@_;
+        open(INP1, "< $file_name") or die "Can not open an input file: $!";
+        my @file1=<INP1>;
+        close (INP1);
+        chomp @file1;
+        return @file1;
+}		
